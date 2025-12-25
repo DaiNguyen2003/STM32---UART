@@ -1,0 +1,40 @@
+# Build outputs
+/Debug/
+/Release/
+
+# IDE files
+.settings/
+.cproject
+.project
+.mxproject
+*.launch
+
+# Compiled files
+*.o
+*.d
+*.elf
+*.bin
+*.hex
+*.map
+*.list
+
+# Backup files
+*~
+*.bak
+
+# Keep only essential source files
+# Ignore all Core files except main.c
+Core/Inc/
+Core/Src/stm32*
+Core/Src/syscalls.c
+Core/Src/sysmem.c
+Core/Src/system_stm32*
+
+# Startup files
+Core/Startup/
+
+# Drivers
+Drivers/
+
+# IOC file (CubeMX project)
+*.ioc
