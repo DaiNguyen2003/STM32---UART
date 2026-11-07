@@ -22,7 +22,6 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include <stdio.h>
-#include <string.h>
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -43,15 +42,18 @@
  UART_HandleTypeDef huart1;
 
 /* USER CODE BEGIN PV */
- uint8_t rx_buffer[64];
- uint8_t rx_index = 0;
- 
- // Debug variables - xem trong Live Expressions hoặc Watch
- volatile uint32_t debug_rx_count = 0;      // Tổng số lần nhận data
- volatile uint32_t debug_on_count = 0;      // Số lần nhận lệnh "on"
- volatile uint32_t debug_off_count = 0;     // Số lần nhận lệnh "off"
- volatile uint8_t debug_last_cmd_len = 0;   // �?ộ dài lệnh nhận được
- volatile char debug_last_cmd[16] = {0};    // Chuỗi lệnh cuối nhận được
+#define RX_QUEUE_SIZE 64U
+static uint8_t rx_byte;
+static volatile uint8_t rx_queue[RX_QUEUE_SIZE];
+static volatile uint8_t rx_write;
+static volatile uint8_t rx_read;
+
+volatile uint32_t debug_rx_count;
+volatile uint32_t debug_rx_dropped;
+volatile uint32_t debug_on_count;
+volatile uint32_t debug_off_count;
+volatile uint8_t debug_last_cmd_len;
+volatile char debug_last_cmd[16];
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -59,51 +61,75 @@ void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
 static void MX_USART1_UART_Init(void);
 /* USER CODE BEGIN PFP */
-/* USER CODE BEGIN PFP */
-void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart) {
-    if (huart->Instance == USART1) {
-        debug_rx_count++;
-        
-        char debug_msg[64];
-        uint8_t received_char = rx_buffer[0];
-        
-        // Lưu ký tự nhận được
-        debug_last_cmd[0] = received_char;
-        debug_last_cmd[1] = '\0';
-        debug_last_cmd_len = 1;
-        
-        // Echo lại
-        HAL_UART_Transmit(&huart1, &received_char, 1, 10);
-        
-        // Lệnh "1" - LED BẬT (giữ sáng)
-        if (received_char == '1') {
-            debug_on_count++;
-            HAL_GPIO_WritePin(GPIOC, GPIO_PIN_13, GPIO_PIN_RESET);  // LED ON
-            sprintf(debug_msg, " -> LED ON! (%lu)\r\n", debug_on_count);
-            HAL_UART_Transmit(&huart1, (uint8_t*)debug_msg, strlen(debug_msg), 100);
-        }
-        // Lệnh "0" - LED TẮT
-        else if (received_char == '0') {
-            debug_off_count++;
-            HAL_GPIO_WritePin(GPIOC, GPIO_PIN_13, GPIO_PIN_SET);    // LED OFF
-            sprintf(debug_msg, " -> LED OFF! (%lu)\r\n", debug_off_count);
-            HAL_UART_Transmit(&huart1, (uint8_t*)debug_msg, strlen(debug_msg), 100);
-        }
-        // Enter
-        else if (received_char == '\r' || received_char == '\n') {
-            HAL_UART_Transmit(&huart1, (uint8_t*)"\r\n", 2, 10);
-        }
-        
-        // Nhận tiếp
-        HAL_UART_Receive_IT(&huart1, &rx_buffer[0], 1);
+/* USER CODE END PFP */
+
+/* USER CODE BEGIN 0 */
+void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
+{
+    if (huart != &huart1)
+    {
+        return;
+    }
+
+    uint8_t next = (rx_write + 1U) % RX_QUEUE_SIZE;
+    debug_rx_count++;
+    if (next == rx_read)
+    {
+        debug_rx_dropped++;
+    }
+    else
+    {
+        rx_queue[rx_write] = rx_byte;
+        rx_write = next;
+    }
+    HAL_UART_Receive_IT(huart, &rx_byte, 1);
+}
+
+void HAL_UART_ErrorCallback(UART_HandleTypeDef *huart)
+{
+    if (huart == &huart1 && huart->RxState == HAL_UART_STATE_READY)
+    {
+        HAL_UART_Receive_IT(huart, &rx_byte, 1);
     }
 }
-/* USER CODE END PFP */
-/* USER CODE END PFP */
 
-/* Private user code ---------------------------------------------------------*/
-/* USER CODE BEGIN 0 */
+static void SendText(const char *text, uint16_t length)
+{
+    HAL_UART_Transmit(&huart1, (const uint8_t *)text, length, 100);
+}
 
+static void ProcessByte(uint8_t byte)
+{
+    debug_last_cmd[0] = (char)byte;
+    debug_last_cmd_len = 1;
+    HAL_UART_Transmit(&huart1, &byte, 1, 10);
+
+    char response[32];
+    int length;
+    switch (byte)
+    {
+        case '1':
+            HAL_GPIO_WritePin(GPIOC, GPIO_PIN_13, GPIO_PIN_RESET);
+            length = snprintf(response, sizeof(response), " -> LED ON! (%lu)\r\n",
+                              (unsigned long)++debug_on_count);
+            break;
+        case '0':
+            HAL_GPIO_WritePin(GPIOC, GPIO_PIN_13, GPIO_PIN_SET);
+            length = snprintf(response, sizeof(response), " -> LED OFF! (%lu)\r\n",
+                              (unsigned long)++debug_off_count);
+            break;
+        case '\r':
+        case '\n':
+            SendText("\r\n", 2);
+            return;
+        default:
+            return;
+    }
+    if (length > 0 && (size_t)length < sizeof(response))
+    {
+        SendText(response, (uint16_t)length);
+    }
+}
 /* USER CODE END 0 */
 
 /**
@@ -136,20 +162,12 @@ int main(void)
   MX_GPIO_Init();
   MX_USART1_UART_Init();
   /* USER CODE BEGIN 2 */
-  HAL_UART_Receive_IT(&huart1, rx_buffer, 1);  // Bắt đầu nhận
-  
-  // In số từ 1 đến 30 qua UART
-  char msg[32];
-  for (int i = 1; i <= 30; i++)
+  if (HAL_UART_Receive_IT(&huart1, &rx_byte, 1) != HAL_OK)
   {
-      sprintf(msg, "So: %d\r\n", i);
-      HAL_UART_Transmit(&huart1, (uint8_t*)msg, strlen(msg), 100);
-      HAL_Delay(100);  // Delay 100ms giữa mỗi số
+      Error_Handler();
   }
-  
-  // Thông báo hoàn thành
-  sprintf(msg, "Done!\r\n");
-  HAL_UART_Transmit(&huart1, (uint8_t*)msg, strlen(msg), 100);
+  unsigned next_number = 1U;
+  uint32_t last_count_tick = HAL_GetTick() - 100U;
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -159,6 +177,32 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
+    if (rx_read != rx_write)
+    {
+        uint8_t byte = rx_queue[rx_read];
+        rx_read = (rx_read + 1U) % RX_QUEUE_SIZE;
+        ProcessByte(byte);
+    }
+
+    uint32_t now = HAL_GetTick();
+    if (next_number <= 31U && now - last_count_tick >= 100U)
+    {
+        if (next_number == 31U)
+        {
+            SendText("Done!\r\n", 7);
+        }
+        else
+        {
+            char message[20];
+            int length = snprintf(message, sizeof(message), "So: %u\r\n", next_number);
+            if (length > 0 && (size_t)length < sizeof(message))
+            {
+                SendText(message, (uint16_t)length);
+            }
+        }
+        next_number++;
+        last_count_tick = now;
+    }
   }
   /* USER CODE END 3 */
 }

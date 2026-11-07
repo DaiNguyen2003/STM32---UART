@@ -1,164 +1,49 @@
-# UART Communication với STM32
+# STM32 UART · Điều khiển LED qua terminal
 
-## 📖 Giới thiệu về UART
+Demo **USART1 trên STM32F103C8T6 (Blue Pill)**. Gửi `1` để bật LED PC13, `0` để tắt. Firmware echo ký tự và gửi trạng thái để có thể kiểm tra cả hai chiều UART.
 
-**UART (Universal Asynchronous Receiver/Transmitter)** là giao thức truyền thông nối tiếp bất đồng bộ, được sử dụng rộng rãi trong các hệ thống nhúng để giao tiếp giữa vi điều khiển và các thiết bị ngoại vi.
+![Sơ đồ đấu nối Blue Pill và USB–TTL 3,3 V](docs/images/uart-wiring.svg)
 
-### Đặc điểm chính:
-- **Bất đồng bộ**: Không cần tín hiệu clock chung
-- **Full-duplex**: Có thể truyền và nhận đồng thời
-- **Đơn giản**: Chỉ cần 2 dây (TX, RX) + GND
+## Đấu dây
 
-### Ứng dụng thực tế:
-| Ứng dụng | Mô tả |
-|----------|-------|
-| Debug/Console | In log, debug qua terminal |
-| GPS Module | Nhận dữ liệu vị trí |
-| Bluetooth (HC-05) | Giao tiếp không dây |
-| GSM Module | Gửi SMS, gọi điện |
-| RS-232/RS-485 | Giao tiếp công nghiệp |
+| Blue Pill | USB–TTL | Vai trò |
+| --- | --- | --- |
+| PA9 | RXD | USART1 TX |
+| PA10 | TXD | USART1 RX |
+| GND | GND | Mass chung |
 
----
+Dùng adapter USB–TTL mức logic 3,3 V. Cấp nguồn cho Blue Pill riêng phù hợp với board.
 
-## 🔧 UART với STM32
+## Build và nạp firmware
 
-### Các UART trên STM32F103C8T6 (Blue Pill):
-| UART | TX Pin | RX Pin | Ghi chú |
-|------|--------|--------|---------|
-| USART1 | PA9 | PA10 | Thường dùng cho debug |
-| USART2 | PA2 | PA3 | Kết nối ngoại vi |
-| USART3 | PB10 | PB11 | Kết nối ngoại vi |
+Cần **Python 3.9+**, **GNU Arm Embedded** (`arm-none-eabi-gcc`, `objcopy`, `size`) và gói **STM32CubeF1 v1.8.7**. Script dùng HAL và startup từ gói ST, cùng linker script 64 KiB flash / 20 KiB SRAM của STM32F103C8.
 
-### Sơ đồ kết nối với USB-TTL:
-```
-STM32          USB-TTL
-─────          ───────
-PA9 (TX)  ───► RX
-PA10 (RX) ◄─── TX
-GND       ──── GND
+```sh
+python build.py
 ```
 
-> ⚠️ **Lưu ý**: TX của STM32 nối với RX của USB-TTL và ngược lại!
+Đặt GNU Arm Embedded vào `PATH`, hoặc chỉ định thư mục `bin` của toolchain. Nếu gói HAL nằm ngoài thư mục mặc định `~/STM32Cube/Repository/STM32Cube_FW_F1_V1.8.7`, truyền đường dẫn tới thư mục chứa `Drivers`.
 
----
-
-## ⚙️ Cách Config trong STM32CubeMX
-
-### Bước 1: Chọn USART
-1. Mở **Pinout & Configuration**
-2. Tìm `USART1` trong danh sách Connectivity
-3. Chọn Mode: **Asynchronous**
-
-### Bước 2: Cấu hình Parameters
-| Parameter | Giá trị thường dùng |
-|-----------|---------------------|
-| Baud Rate | 115200 |
-| Word Length | 8 Bits |
-| Stop Bits | 1 |
-| Parity | None |
-| Hardware Flow Control | None |
-
-### Bước 3: Enable Interrupt (nếu cần)
-1. Vào tab **NVIC Settings**
-2. Tick ✅ **USART1 global interrupt**
-
-### Bước 4: Generate Code
-1. **Project Manager** → Đặt tên project
-2. **Generate Code**
-
----
-
-## ✅ Task List - Các bước thực hiện
-
-### Setup Project
-- [ ] Tạo project mới trong STM32CubeIDE
-- [ ] Cấu hình System Clock (HSE, PLL)
-- [ ] Cấu hình USART1 Asynchronous mode
-- [ ] Enable USART1 interrupt (nếu dùng IT mode)
-- [ ] Generate code
-
-### Coding
-- [ ] Include thư viện `<stdio.h>` và `<string.h>`
-- [ ] Khai báo buffer nhận dữ liệu
-- [ ] Viết hàm callback `HAL_UART_RxCpltCallback()`
-- [ ] Gọi `HAL_UART_Receive_IT()` để bắt đầu nhận
-- [ ] Xử lý lệnh trong callback
-
-### Testing
-- [ ] Kết nối USB-TTL với máy tính
-- [ ] Mở terminal (Hercules, Putty, Arduino Serial Monitor)
-- [ ] Cấu hình đúng COM port và Baud rate
-- [ ] Test gửi/nhận dữ liệu
-
----
-
-## ❌ Lỗi thường gặp và cách Fix
-
-### 1. Không nhận được dữ liệu
-| Nguyên nhân | Cách fix |
-|-------------|----------|
-| TX/RX đấu ngược | Đổi dây TX ↔ RX |
-| Baud rate không khớp | Kiểm tra cả 2 phía cùng baud rate |
-| Chưa gọi `HAL_UART_Receive_IT()` | Gọi trong `main()` trước vòng while |
-| Interrupt chưa enable | Tick USART1 interrupt trong CubeMX |
-
-### 2. LED chỉ nháy rồi tắt (không giữ trạng thái)
-```c
-// ❌ Sai - Toggle LED
-HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_13);
-
-// ✅ Đúng - Set/Reset cụ thể
-if (received_char == '1') {
-    HAL_GPIO_WritePin(GPIOC, GPIO_PIN_13, GPIO_PIN_RESET);  // LED ON
-}
-else if (received_char == '0') {
-    HAL_GPIO_WritePin(GPIOC, GPIO_PIN_13, GPIO_PIN_SET);    // LED OFF
-}
+```sh
+python build.py --sdk "<STM32CubeF1 root>" --toolchain "<GNU Arm bin>"
 ```
 
-### 3. LED sáng mờ hoặc không ổn định
-- **Nguyên nhân**: Điện áp 3.3V không đủ cho LED
-- **Fix**: Cấp nguồn 5V cho LED qua điện trở hạn dòng (330Ω - 1kΩ)
+Build tạo `build/firmware.elf`, `build/firmware.hex` và `build/firmware.bin`. Nạp `.hex` bằng STM32CubeProgrammer qua ST-LINK/SWD, rồi reset board. Có thể dùng `.elf` để nạp symbol và debug. Firmware mẫu dùng HSE 8 MHz và SYSCLK 72 MHz.
 
-### 4. Nhận sai ký tự hoặc ký tự lạ
-| Nguyên nhân | Cách fix |
-|-------------|----------|
-| Sai baud rate | Đồng bộ baud rate 2 phía |
-| Sai Word Length | Kiểm tra 8-bit hay 9-bit |
-| Nhiễu tín hiệu | Dùng dây ngắn, thêm tụ lọc |
+Tài liệu công cụ: [STM32CubeF1](https://github.com/STMicroelectronics/STM32CubeF1) · [STM32CubeProgrammer](https://www.st.com/en/development-tools/stm32cubeprog.html).
 
-### 5. UART chỉ nhận 1 lần
-```c
-// ❌ Sai - Không gọi lại Receive_IT
-void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart) {
-    // Xử lý dữ liệu...
-}
+## Chạy thử
 
-// ✅ Đúng - Gọi lại để nhận tiếp
-void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart) {
-    // Xử lý dữ liệu...
-    HAL_UART_Receive_IT(&huart1, &rx_buffer[0], 1);  // Nhận tiếp!
-}
-```
+1. Mở cổng serial của USB–TTL ở **115200 bit/s, 8 data bit, no parity, 1 stop bit**, tắt flow control.
+2. Mở terminal trước khi reset board để thấy chuỗi `So: 1` đến `So: 30` và `Done!`.
+3. Gửi `1` và kiểm tra LED sáng cùng phản hồi `1 -> LED ON!`. Gửi `0` và kiểm tra LED tắt. Phản hồi kèm bộ đếm lệnh.
 
----
+![Luồng nhận byte, đưa vào hàng đợi và phản hồi từ main loop](docs/images/uart-receive.svg)
 
-## 📁 Cấu trúc Project
+## Mã nguồn và chẩn đoán
 
-```
-UART/
-├── Core/
-│   ├── Inc/
-│   │   └── main.h
-│   └── Src/
-│       └── main.c          ← Code chính
-├── docs/
-│   └── CODE_GUIDE.md       ← Hướng dẫn code
-└── README.md               ← File này
-```
+- [Ứng dụng USART1](Core/Src/main.c) xử lý lệnh, echo và cập nhật LED trong vòng lặp chính.
+- [Hướng dẫn HAL](docs/CODE_GUIDE.md) giải thích callback, hàng đợi, cấu hình CubeMX và cách debug.
+- [Board support](firmware/board.c) cấu hình GPIO, USART1 IRQ và SysTick cho build độc lập.
 
----
-
-## 🔗 Tài liệu tham khảo
-- [STM32 HAL UART Documentation](https://www.st.com/resource/en/user_manual/um1785-description-of-stm32f0-hal-and-lowlayer-drivers-stmicroelectronics.pdf)
-- [STM32CubeIDE User Guide](https://www.st.com/resource/en/user_manual/um2609-stm32cubeide-user-guide-stmicroelectronics.pdf)
+Không thấy phản hồi thì kiểm tra đúng cổng, dây TX/RX đấu chéo, GND chung và baud rate. Nếu mất dữ liệu khi gửi liên tục, xem `debug_rx_dropped` hoặc gửi lệnh với nhịp chậm hơn.

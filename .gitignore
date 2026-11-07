@@ -38,3 +38,6 @@ Drivers/
 
 # IOC file (CubeMX project)
 *.ioc
+
+/build/
+__pycache__/
