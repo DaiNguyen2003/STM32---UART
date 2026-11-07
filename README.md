@@ -1,10 +1,12 @@
 # STM32 UART · Điều khiển LED qua terminal
 
+## Tổng quan
+
 Demo **USART1 trên STM32F103C8T6 (Blue Pill)**. Gửi `1` để bật LED PC13, `0` để tắt. Firmware echo ký tự và gửi trạng thái để có thể kiểm tra cả hai chiều UART.
 
-![Sơ đồ đấu nối Blue Pill và USB–TTL 3,3 V](docs/images/uart-wiring.svg)
+## Phần cứng
 
-## Đấu dây
+![Sơ đồ đấu nối Blue Pill và USB–TTL 3,3 V](docs/images/uart-wiring.svg)
 
 | Blue Pill | USB–TTL | Vai trò |
 | --- | --- | --- |
@@ -38,12 +40,16 @@ Tài liệu công cụ: [STM32CubeF1](https://github.com/STMicroelectronics/STM3
 2. Mở terminal trước khi reset board để thấy chuỗi `So: 1` đến `So: 30` và `Done!`.
 3. Gửi `1` và kiểm tra LED sáng cùng phản hồi `1 -> LED ON!`. Gửi `0` và kiểm tra LED tắt. Phản hồi kèm bộ đếm lệnh.
 
-![Luồng nhận byte, đưa vào hàng đợi và phản hồi từ main loop](docs/images/uart-receive.svg)
+## Cấu trúc dự án
 
-## Mã nguồn và chẩn đoán
+| Đường dẫn | Vai trò |
+| --- | --- |
+| [`Core/Inc/`](Core/Inc/) | Header ứng dụng và thư viện. |
+| [`Core/Src/`](Core/Src/) | USART1, hàng đợi RX và điều khiển LED PC13. |
+| [`firmware/`](firmware/) | Khởi tạo phần cứng, SysTick và linker script. |
+| [`docs/`](docs/) | Hướng dẫn kỹ thuật và sơ đồ SVG trong `docs/images/`. |
+| [`build.py`](build.py) | Build firmware từ mã nguồn. |
 
-- [Ứng dụng USART1](Core/Src/main.c) xử lý lệnh, echo và cập nhật LED trong vòng lặp chính.
-- [Hướng dẫn HAL](docs/CODE_GUIDE.md) giải thích callback, hàng đợi, cấu hình CubeMX và cách debug.
-- [Board support](firmware/board.c) cấu hình GPIO, USART1 IRQ và SysTick cho build độc lập.
+## Tài liệu
 
-Không thấy phản hồi thì kiểm tra đúng cổng, dây TX/RX đấu chéo, GND chung và baud rate. Nếu mất dữ liệu khi gửi liên tục, xem `debug_rx_dropped` hoặc gửi lệnh với nhịp chậm hơn.
+- [Hướng dẫn kỹ thuật](docs/CODE_GUIDE.md).

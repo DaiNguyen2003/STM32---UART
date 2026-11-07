@@ -1,43 +1,37 @@
-# Build outputs
+# Build and Python output
+/build/
 /Debug/
 /Release/
+__pycache__/
+*.py[cod]
 
-# IDE files
-.settings/
+# STM32CubeIDE workspace files
 .cproject
-.project
 .mxproject
+.project
+.settings/
 *.launch
 
-# Compiled files
+# Generated CubeMX files; source configuration lives in config/
+/*.ioc
+/*.ld
+/Drivers/
+/Core/Startup/
+/Core/Inc/stm32f1xx_hal_conf.h
+/Core/Inc/stm32f1xx_it.h
+/Core/Src/stm32f1xx_hal_msp.c
+/Core/Src/stm32f1xx_it.c
+/Core/Src/syscalls.c
+/Core/Src/sysmem.c
+/Core/Src/system_stm32f1xx.c
+
+# Local editor backups and compiled firmware
+*~
+*.bak
 *.o
 *.d
 *.elf
-*.bin
 *.hex
+*.bin
 *.map
 *.list
-
-# Backup files
-*~
-*.bak
-
-# Keep only essential source files
-# Ignore all Core files except main.c
-Core/Inc/
-Core/Src/stm32*
-Core/Src/syscalls.c
-Core/Src/sysmem.c
-Core/Src/system_stm32*
-
-# Startup files
-Core/Startup/
-
-# Drivers
-Drivers/
-
-# IOC file (CubeMX project)
-*.ioc
-
-/build/
-__pycache__/
